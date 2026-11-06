@@ -63,7 +63,14 @@ fn descriptor(ctx) {
 
 fn publish_config(ctx) { il::publish_il(ctx, descriptor(ctx)); }
 
-fn start(ctx) {}
+// The cooktop reports only when something changes, so a hot reload (which re-announces
+// the entities) left every value unknown until the next use (seen 2026-11-06). The last
+// record is kept in driver state and decoded again here; nothing is sent. A fresh attach
+// has nothing kept and waits for the cooktop's own record as before.
+fn start(ctx) {
+    let kept = ctx.state_get("last_record");
+    if kept != () { publish_record(ctx, hex_decode(kept)); }
+}
 
 fn on_drop(ctx) { il::publish_property(ctx, "available", "false"); }
 
@@ -87,6 +94,11 @@ fn on_data(ctx, data) {
     if inner[1] == 0xeb && inner.len() >= 50 { r = inner.extract(2, 48); }
     if inner[1] == 0xec && inner.len() >= 98 { r = inner.extract(50, 48); }
     if r == () { return; }
+    ctx.state_set("last_record", hex_encode_upper(r));
+    publish_record(ctx, r);
+}
+
+fn publish_record(ctx, r) {
     il::publish_property(ctx, "available", "true");
     il::publish_property(ctx, "remote_start", c::bit(r[0], 0x02));
     publish_enum(ctx, "flex_mode", flex_modes(), r[1]);
