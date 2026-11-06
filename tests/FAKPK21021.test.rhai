@@ -631,21 +631,32 @@ fn test_pr_117_28() {
 
 import "washtower_kr_test" as wt;
 
-// Power-on success acknowledges acceptance; only telemetry confirms that the power changed.
+// start() asks the tower for a record, so a hot reload republishes state.
+fn test_start_queries_status() {
+ let d=device();d.start();
+ expect_eq(d.sent().len(),1);expect_eq(hex_encode(d.sent()[0]),"aa12f0ed1121010000001804111200005ebb");
+ expect_eq(d.timers(),[]);expect_eq(d.script_error(),());
+}
+// Power-on success acknowledges acceptance; a status query follows 3 s later and only
+// telemetry confirms that the power changed.
 fn test_power_acceptance_waits_for_telemetry_and_then_times_out() {
  let d=device();d.start();let r=blob(67);
+ expect_eq(d.sent().len(),1);
  d.feed(wt::status(51,r));
  d.set("power","true");
  expect_props(d,#{power:"false",power_transition:"turning_on"});
  expect_eq(d.timers(),[["power_on_timeout",120000]]);
- d.set("power","true");expect_eq(d.sent().len(),1);
+ d.set("power","true");expect_eq(d.sent().len(),2);
  d.feed(wt::response(51));
  expect_props(d,#{power:"false",power_transition:"command_accepted"});
  expect_eq(d.sent().len(),2);
- d.feed(wt::response(51));expect_eq(d.sent().len(),2);
+ expect_eq(d.timers().filter(|t| t[0]=="status_refresh"),[["status_refresh",3000]]);
+ d.fire("status_refresh");
+ expect_eq(d.sent().len(),3);expect_eq(hex_encode(d.sent()[2]),"aa12f0ed1121010000001804111200005ebb");
+ d.feed(wt::response(51));expect_eq(d.sent().len(),3);
  d.fire("power_on_timeout");
  expect_props(d,#{power:"false",power_transition:"timeout"});
- d.set("power","true");expect_eq(d.sent().len(),3);
+ d.set("power","true");expect_eq(d.sent().len(),4);
  r[21]=1;d.feed(wt::status(51,r));
  expect_props(d,#{power:"true",power_transition:"complete"});
  expect_eq(d.timers(),[]);expect_eq(d.script_error(),());
