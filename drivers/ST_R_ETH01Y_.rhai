@@ -121,17 +121,20 @@ fn record(ctx, r) {
     if ctx.state_get("power") != on {
         ctx.state_set("power", on);
         il::publish_property(ctx, "power", if on { "true" } else { "false" });
-        if !on {
-            // Clear the last course so HA does not keep showing it while off (PR #9 review).
-            il::publish_absent(ctx, "active_course");
-            il::publish_absent(ctx, "duration_minutes");
-        }
     }
     if on {
         let name = t::name(courses(), r[2]);
         if name == () { name = "unknown_" + r[2].to_string(); }
         il::publish_property(ctx, "active_course", name);
         il::publish_property(ctx, "duration_minutes", r[6].to_string());
+        ctx.state_set("course_shown", true);
+    } else if ctx.state_get("course_shown") == true {
+        // Clear the last course so HA does not keep showing it while off (PR #9 review).
+        // Keyed on what was published, not on a power change: a remote power-off already
+        // set the power state optimistically, so the off record is not a "change" here.
+        il::publish_absent(ctx, "active_course");
+        il::publish_absent(ctx, "duration_minutes");
+        ctx.state_set("course_shown", false);
     }
 }
 
