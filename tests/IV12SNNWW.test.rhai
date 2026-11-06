@@ -154,3 +154,21 @@ fn test_reload_republishes_kept_values() {
     expect_eq(d.property("battery"), battery);
     expect_eq(d.clips().len(), 0);
 }
+
+// known 목록에 없던 키만 담긴 델타가 조용히 버려지던 문제의 회귀 테스트:
+// 관문은 on_data가 실제로 읽는 모든 키를 포함해야 한다.
+fn test_delta_with_only_unlisted_fields_publishes() {
+    let d = device();
+    d.feed(blob_mon("{\"mon\":{\"SLEEP_MODE\":\"ON\"}}"));
+    expect_eq(d.property("sleep_mode"), "true");
+    d.feed(blob_mon("{\"mon\":{\"CARPET_AVOID\":\"AUTO\"}}"));
+    expect_eq(d.property("carpet_avoid"), "AUTO");
+    d.feed(blob_mon("{\"mon\":{\"MAINT_MAINBRUSH\":\"6009|18000\"}}"));
+    expect_eq(d.property("maint_main_brush"), "6009");
+    d.feed(blob_mon("{\"mon\":{\"LANGUAGE\":\"ko-KR\"}}"));
+    expect_eq(d.property("language"), "ko-KR");
+    d.feed(blob_mon("{\"mon\":{\"DND_INFO\":{\"SET\":\"ON\",\"START_TIME\":\"22:00\",\"END_TIME\":\"07:00\"}}}"));
+    expect(d.property("do_not_disturb") != (), "do_not_disturb published");
+    expect(d.property("do_not_disturb").contains("22:00"), "do_not_disturb carries the schedule");
+    expect_eq(d.script_error(), ());
+}
