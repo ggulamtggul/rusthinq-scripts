@@ -27,13 +27,18 @@ fn flex_modes() { #{ "0": "OFF", "1": "LEFT_FLEX", "2": "RIGHT_FLEX" } }
 fn burner_states() {
     #{ "0": "INIT", "1": "COOKING_IN_PROGRESS", "2": "PAUSED", "3": "LOCK" }
 }
+// Labels follow this unit's physical burners, not the protocol slot names. The owner's
+// unit has three burners (left front, left rear, right); on 2026-11-06 they were lit in
+// that order at power 1, 2, 3 and the records lit lf, rf, lr in that order with those
+// power levels. So slot rf is the left rear burner and slot lr the right burner; rr and
+// center never changed. Keys stay as they are so entity IDs do not move.
 fn burners() {
     [
         #{ key: "lf", offset: 2, label: "왼쪽 앞 화구" },
-        #{ key: "lr", offset: 11, label: "왼쪽 뒤 화구" },
-        #{ key: "rf", offset: 20, label: "오른쪽 앞 화구" },
-        #{ key: "rr", offset: 29, label: "오른쪽 뒤 화구" },
-        #{ key: "center", offset: 38, label: "가운데 화구" }
+        #{ key: "lr", offset: 11, label: "오른쪽 화구" },
+        #{ key: "rf", offset: 20, label: "왼쪽 뒤 화구" },
+        #{ key: "rr", offset: 29, label: "안 쓰는 칸 (오른쪽 뒤)" },
+        #{ key: "center", offset: 38, label: "안 쓰는 칸 (가운데)" }
     ]
 }
 
