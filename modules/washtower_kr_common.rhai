@@ -9,18 +9,51 @@ fn entity(key) {
  "reserveTimeMinute"=>"reserve_time","remainTimeMinute"=>"remaining_time","initialTimeMinute"=>"initial_time",
  "doorClose"=>"door","childLock"=>"child_lock","doorLock"=>"door_lock","remoteStart"=>"remote_start",
  "remoteMaintain"=>"remote_maintain","soilWash"=>"soil_wash","freshCare"=>"fresh_care","turboWash"=>"turbo_wash",
- "ecoHybrid"=>"eco_hybrid","wrinkleCare"=>"wrinkle_care","dryLevel"=>"dry_level",_=>key }
+ "ecoHybrid"=>"eco_hybrid","wrinkleCare"=>"wrinkle_care","dryLevel"=>"dry_level",
+ "preState"=>"pre_state","AIDDLed"=>"aidd_led","addGarment"=>"add_garment","applyBuzzer"=>"apply_buzzer",
+ "applyRemoteMaintain"=>"apply_remote_maintain","autoSoak"=>"auto_soak","cloudCourse"=>"cloud_course",
+ "creaseCare"=>"crease_care","currentDateDisplay"=>"current_date_display","currentTimeDisplay"=>"current_time_display",
+ "detergentIdxShowBeforeStart"=>"detergent_idx_show","dnnReady"=>"dnn_ready","drumLight"=>"drum_light",
+ "drumlightAutoOn"=>"drumlight_auto_on","drumlightOpt"=>"drumlight_opt","dryReady_state"=>"dry_ready_state",
+ "endMelody"=>"end_melody","endReserveTime"=>"end_reserve_time","ezCSDetergentSetVal"=>"ez_detergent_set",
+ "ezCSSoftenerSetVal"=>"ez_softener_set","ezDetergentState"=>"ez_detergent_state","ezSoftenerState"=>"ez_softener_state",
+ "laundryCare"=>"laundry_care","preWash"=>"pre_wash","rinseSpin"=>"rinse_spin","smartCare_onOff"=>"smart_care",
+ "smartGridEnable"=>"smart_grid","ushLaundryCareSettingOnOff"=>"laundry_care_setting","washLoadDisplay"=>"wash_load_display",
+ "waterPlus"=>"water_plus",_=>key }
 }
-fn public_keys() { let out=["state","course","reserveTimeMinute","remainTimeMinute","initialTimeMinute","error","childLock","doorLock","remoteStart"];if model().tag==0x33 {out.push("doorClose");}out }
+fn public_keys() { let mk=model().publicKeys;if mk!=() {return mk;} let out=["state","course","reserveTimeMinute","remainTimeMinute","initialTimeMinute","error","childLock","doorLock","remoteStart"];if model().tag==0x33 {out.push("doorClose");}out }
 fn definition(f) {
+ if f.def!=() {let d=f.def;if d.type=="select" && d.options==() {d.options=t::options(f.values);}return d;}
  if ["childLock","doorLock","remoteStart","doorClose"].contains(f.key) {return #{type:"binary"};}
  if f.values!=() {return #{type:"select",options:t::options(f.values)};}
  #{type:"number",unit:"min"}
 }
+fn labels() { [
+ ["power", "전원"], ["power_transition", "전원 전환"], ["wake", "깨우기"], ["power_off", "전원 끄기"],
+ ["pause", "일시정지"], ["start", "시작"], ["remote_maintain", "원격 유지"],
+ ["state", "상태"], ["course", "코스"], ["reserve_time", "예약 시간"], ["remaining_time", "남은 시간"],
+ ["initial_time", "전체 시간"], ["error", "오류"], ["child_lock", "어린이 잠금"], ["door_lock", "문 잠금"],
+ ["remote_start", "원격 시작"], ["door", "문 열림"],
+ ["setting_course", "설정 코스"], ["setting_temp", "설정 온도"], ["setting_spin", "탈수 세기"],
+ ["setting_rinse", "헹굼"], ["setting_soil_wash", "오염도"], ["setting_fresh_care", "프레시케어"],
+ ["setting_steam", "스팀"], ["setting_turbo_wash", "터보샷"], ["setting_eco_hybrid", "에코하이브리드"],
+ ["setting_wrinkle_care", "구김 방지"], ["setting_dry_level", "건조 단계"],
+ ["pre_state", "이전 상태"], ["buzzer", "알림음"], ["ez_detergent_set", "세제 자동투입 설정"],
+ ["ez_softener_set", "유연제 자동투입 설정"], ["ez_detergent_state", "세제 부족"], ["ez_softener_state", "유연제 부족"],
+ ["water_plus", "물 추가"], ["pre_wash", "애벌세탁"], ["auto_soak", "자동 불림"], ["rinse_spin", "헹굼+탈수"],
+ ["smart_grid", "스마트 그리드"], ["favorite", "즐겨찾기"], ["smart_care", "스마트 케어"], ["crease_care", "구김 케어"],
+ ["drum_light", "드럼 라이트"], ["add_garment", "세탁물 추가"], ["wash_load_display", "세탁량 표시"],
+ ["delay", "종료 예약"], ["aidd_led", "AI DD 표시등"], ["dnn_ready", "DNN 준비"], ["apply_buzzer", "알림음 적용"],
+ ["apply_remote_maintain", "원격 유지 적용"], ["dry_ready_state", "건조 준비"], ["cloud_course", "클라우드 코스"],
+ ["end_melody", "종료 멜로디"], ["laundry_care", "세탁 케어"], ["current_time_display", "현재 시각 표시"],
+ ["end_reserve_time", "종료 예약 시각"], ["current_date_display", "현재 날짜 표시"], ["drumlight_auto_on", "드럼등 자동 켜기"],
+ ["drumlight_opt", "드럼등 옵션"], ["detergent_idx_show", "시작 전 세제 표시"], ["laundry_care_setting", "세탁 케어 설정"]
+] }
 fn descriptor(ctx) {
  let props=#{available:#{type:"binary",role:"available"},power:#{type:"binary",rw:true},
  power_transition:#{type:"select",category:"diagnostic",options:["standby","turning_on","command_accepted","complete","timeout"]},
- wake:#{type:"trigger"},power_off:#{type:"trigger"},pause:#{type:"trigger"},start:#{type:"trigger"},remote_maintain:#{type:"binary",rw:true}};
+ wake:#{type:"trigger"},pause:#{type:"trigger"},start:#{type:"trigger"},remote_maintain:#{type:"binary",rw:true}};
+ if model().hidePowerOff!=true {props.power_off=#{type:"trigger"};}
  for key in public_keys() {let f=field(key);if f!=() {props[entity(key)]=definition(f);}}
  for key in settings() {
   let f=field(key);if f==() || f.values==() {continue;}
@@ -28,14 +61,16 @@ fn descriptor(ctx) {
   if key=="course" {options=[];for id in rules().keys() {options.push(f.values[id]);}}
   props["setting_"+entity(key)]=#{type:"select",rw:true,options:options};
  }
+ for pair in labels() { if pair[0] in props { let p=props[pair[0]]; p.label=pair[1]; props[pair[0]]=p; } }
  json_stringify(#{il:0,kind:if model().tag==0x33 {"washer"} else {"dryer"},label:model().deviceName,vendor:"LG",model:ctx.model_id(),props:props})
 }
 fn publish_config(ctx) {il::publish_il(ctx,descriptor(ctx));}
-fn on_drop(ctx) {ctx.cancel_timer("power_on_timeout");ctx.state_remove("pending_power");il::publish_property(ctx,"available","false");}
+fn on_drop(ctx) {ctx.cancel_timer("power_on_timeout");ctx.cancel_timer("status_refresh");ctx.state_remove("pending_power");il::publish_property(ctx,"available","false");}
 fn on_timer(ctx,name) {
  if name=="power_on_timeout" && ctx.state_get("pending_power")==true {
   ctx.state_remove("pending_power");ctx.state_remove("power_refresh");il::publish_property(ctx,"power_transition","timeout");
  }
+ if name=="status_refresh" {ctx.send_raw(aabb_wrap(hex_decode("f0ed112101000000180411120000")));}
 }
 fn checksum(data) {
  if data.len()<4 || data[0]!=0xaa || data[data.len()-1]!=0xbb {return false;}
@@ -48,7 +83,12 @@ fn power_response(ctx,data) {
  if ![13,13+m.liveRecordLength,13+m.recordLength].contains(data.len()) || data[1]!=data.len() || data[2]!=m.tag || data[3]!=0xe6 || !checksum(data) {return;}
  if hex_encode(data.extract(4,7))!="000201ff010200" {return;}
  ctx.state_set("power_refresh",true);il::publish_property(ctx,"power_transition","command_accepted");
- ctx.send_raw(aabb_wrap(hex_decode("f0ed112101000000180411120000")));
+}
+fn control_response(ctx,data) {
+ let m=model();
+ if ![13,13+m.liveRecordLength,13+m.recordLength].contains(data.len()) || data[1]!=data.len() || data[2]!=m.tag || data[3]!=0xe6 || !checksum(data) {return;}
+ if hex_encode(data.extract(4,5))!="000201ff01" {return;}
+ ctx.set_timer("status_refresh",3000);
 }
 fn record(data) {
  let m=model();
@@ -80,7 +120,9 @@ fn course_defaults(ctx,course,preserve) {
  ctx.state_set("draft",d);ctx.state_set("dirty",dirty);publish_draft(ctx);true
 }
 fn on_data(ctx,data) {
+ c::ack(ctx,data);
  power_response(ctx,data);
+ control_response(ctx,data);
  let r=record(data);if r==() {return;}
  let obs=observed(ctx);let d=draft(ctx);let dirty=dirty(ctx);
  for f in model().fields {
@@ -101,7 +143,7 @@ fn on_data(ctx,data) {
  }
  il::publish_property(ctx,"power",if obs.state==0 {"false"} else {"true"});
  if obs.state!=0 && ctx.state_get("pending_power")==true {
-  ctx.state_remove("pending_power");ctx.state_remove("power_refresh");ctx.cancel_timer("power_on_timeout");il::publish_property(ctx,"power_transition","complete");
+  ctx.state_remove("pending_power");ctx.state_remove("power_refresh");ctx.cancel_timer("power_on_timeout");ctx.cancel_timer("status_refresh");il::publish_property(ctx,"power_transition","complete");
  } else if ctx.state_get("transition_seen")!=true && ctx.state_get("pending_power")!=true {il::publish_property(ctx,"power_transition","standby");}
  ctx.state_set("transition_seen",true);
 }
@@ -158,9 +200,16 @@ fn set_property(ctx,prop,value) {
   if state!=1 || obs.remoteStart!=1 || (model().tag==0x33 && (obs.reserveTimeMinute ?? 0)!=0) || !valid_draft(d) {rejected(ctx,prop);return;}
   ctx.send_raw(aabb_wrap([0xf0,0x26]+start_payload(d)));return;
  }
- if ["power","power_off","pause"].contains(prop) {
+ if prop=="power_off" || (prop=="power" && !c::to_bool(value)) {
+  // Power off rides the F0 E5 power channel with value 0, as the official
+  // app does (AA0DF0E5000001FF010200DABB, captured live 2026-11-05); it is
+  // not gated on remote start. F0 24 below is the stop/pause family only.
+  if state==0 {rejected(ctx,prop);return;}
+  ctx.send_raw(aabb_wrap(hex_decode("f0e5000001ff010200")));return;
+ }
+ if prop=="pause" {
   if state==0 || (obs.remoteStart!=1 && obs.remoteMaintain!=1) {rejected(ctx,prop);return;}
-  ctx.send_raw(aabb_wrap([0xf0,0x24,if prop=="pause" {4} else {1},1,0]));return;
+  ctx.send_raw(aabb_wrap([0xf0,0x24,4,1,0]));return;
  }
  rejected(ctx,prop);
 }
