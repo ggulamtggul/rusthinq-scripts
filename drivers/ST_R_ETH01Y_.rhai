@@ -14,12 +14,19 @@
 //              meaning unconfirmed, reproduced literally), reserve 0x7f = 0,
 //              operation key 0x03 = 1.
 //   smart care keys 0x1c (fine dust), 0x1b (humidity), 0x1a (night care), captured in
-//              both directions; published optimistically like the TS driver.
+//              both directions; published optimistically like the TS driver. The
+//              status record carries no readback for them, so a write that never
+//              lands stays published as set.
 //
 // Status record (36 bytes, extracted from the tunnel envelope the FX___S way):
 //   [2] course id, [6] expected duration in minutes, [9] power (nonzero = on),
 //   [20] smart care bits (1 fine dust, 2 humidity, 3 night care; 0 = master),
 //   [23]/[25] night care start/end hour.
+//   The record start (records from payload[10], body[14] overall) sits one byte
+//   later than aabb_common::enveloped_status (body[13]). This model's framing
+//   differs, but the offset is NOT yet verified against a raw live capture of
+//   this model - the tests are constructed on the same assumption. Check this
+//   offset first when a capture becomes available.
 //   The course id resets to 0 while off, so active_course / duration_minutes are
 //   only published while on. A course id with no confirmed name publishes
 //   `unknown_<id>` (the TS driver's fallback).
@@ -157,9 +164,9 @@ fn record(ctx, r) {
         ctx.state_set("shown_course", name);
         ctx.state_set("shown_duration", r[6].to_string());
     } else if ctx.state_get("course_shown") != false {
-        // Clear the last course so HA does not keep showing it while off (PR #9 review).
-        // Keyed on what was published, not on a power change: a remote power-off already
-        // set the power state optimistically, so the off record is not a "change" here.
+        // Clear the course published while on. Keyed on what was published, not on a
+        // power change: a remote power-off already set the power state optimistically,
+        // so the off record is not a "change" here (seen live 2026-11-06).
         il::publish_absent(ctx, "active_course");
         il::publish_absent(ctx, "duration_minutes");
         ctx.state_set("course_shown", false);
