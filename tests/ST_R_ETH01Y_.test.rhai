@@ -27,6 +27,7 @@ fn test_a_fresh_start_publishes_no_power() {
     d.start();
     expect_eq(d.property("power"), ());
     expect_eq(d.property("active_course"), ());
+    expect_eq(d.property("smart_care_humidity"), ());
     expect_eq(d.sent().len(), 0);
 }
 
@@ -37,10 +38,12 @@ fn test_a_restart_republishes_kept_power_and_course() {
     d.feed(eb_on());
     let course = d.property("active_course");
     let duration = d.property("duration_minutes");
+    let dust = d.property("smart_care_fine_dust");
     d.start();
     expect_eq(d.property("power"), "true");
     expect_eq(d.property("active_course"), course);
     expect_eq(d.property("duration_minutes"), duration);
+    expect_eq(d.property("smart_care_fine_dust"), dust);
     expect_eq(d.sent().len(), 0);
     expect_eq(d.script_error(), ());
 }

@@ -75,6 +75,14 @@ fn start(ctx) {
         il::publish_property(ctx, "active_course", ctx.state_get("shown_course"));
         il::publish_property(ctx, "duration_minutes", ctx.state_get("shown_duration"));
     }
+    let bits = ctx.state_get("smart_care_bits");
+    if bits != () { publish_smart_care(ctx, bits); }
+}
+
+fn publish_smart_care(ctx, bits) {
+    il::publish_property(ctx, "smart_care_fine_dust", c::on_off((bits >> 1) & 1));
+    il::publish_property(ctx, "smart_care_humidity", c::on_off((bits >> 2) & 1));
+    il::publish_property(ctx, "smart_care_night_care", c::on_off((bits >> 3) & 1));
 }
 
 fn on_drop(ctx) { il::publish_property(ctx, "available", "false"); }
@@ -133,9 +141,8 @@ fn record(ctx, r) {
     // checking the cloud): bit 1 fine dust, bit 2 humidity, bit 3 night care; bit 0 stayed
     // set throughout (the cloud's smart-care master switch). The writes stay optimistic and
     // this confirms them, since the styler answers each write with a fresh record.
-    il::publish_property(ctx, "smart_care_fine_dust", c::on_off((r[20] >> 1) & 1));
-    il::publish_property(ctx, "smart_care_humidity", c::on_off((r[20] >> 2) & 1));
-    il::publish_property(ctx, "smart_care_night_care", c::on_off((r[20] >> 3) & 1));
+    publish_smart_care(ctx, r[20]);
+    ctx.state_set("smart_care_bits", r[20]);
     // The TS driver publishes power only when it changes.
     if ctx.state_get("power") != on {
         ctx.state_set("power", on);
