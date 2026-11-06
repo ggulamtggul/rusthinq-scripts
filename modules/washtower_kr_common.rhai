@@ -65,12 +65,16 @@ fn descriptor(ctx) {
  json_stringify(#{il:0,kind:if model().tag==0x33 {"washer"} else {"dryer"},label:model().deviceName,vendor:"LG",model:ctx.model_id(),props:props})
 }
 fn publish_config(ctx) {il::publish_il(ctx,descriptor(ctx));}
+fn status_query(ctx) {ctx.send_raw(aabb_wrap(hex_decode("f0ed112101000000180411120000")));}
+// Runs after publish_config on attach and on a watched hot reload: ask for a record so a
+// reloaded driver republishes state instead of leaving entities unknown while the tower sleeps.
+fn start(ctx) {status_query(ctx);}
 fn on_drop(ctx) {ctx.cancel_timer("power_on_timeout");ctx.cancel_timer("status_refresh");ctx.state_remove("pending_power");il::publish_property(ctx,"available","false");}
 fn on_timer(ctx,name) {
  if name=="power_on_timeout" && ctx.state_get("pending_power")==true {
   ctx.state_remove("pending_power");ctx.state_remove("power_refresh");il::publish_property(ctx,"power_transition","timeout");
  }
- if name=="status_refresh" {ctx.send_raw(aabb_wrap(hex_decode("f0ed112101000000180411120000")));}
+ if name=="status_refresh" {status_query(ctx);}
 }
 fn checksum(data) {
  if data.len()<4 || data[0]!=0xaa || data[data.len()-1]!=0xbb {return false;}
