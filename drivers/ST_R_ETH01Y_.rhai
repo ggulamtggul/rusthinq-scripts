@@ -63,6 +63,16 @@ fn publish_config(ctx) { il::publish_il(ctx, descriptor(ctx)); }
 fn start(ctx) {
     // The TS driver publishes the initially selected course from its constructor.
     il::publish_property(ctx, "course", t::name(courses(), selected(ctx)));
+    // A watched hot reload re-announces the entities, and an idle styler sends no record
+    // to refill them (no status-request frame is known for this model). Republish what
+    // the kept driver state already knows; a fresh attach has nothing kept and waits for
+    // the styler's own record as before. Nothing is sent to the appliance.
+    let power = ctx.state_get("power");
+    if power != () { il::publish_property(ctx, "power", if power { "true" } else { "false" }); }
+    if ctx.state_get("course_shown") == true {
+        il::publish_property(ctx, "active_course", ctx.state_get("shown_course"));
+        il::publish_property(ctx, "duration_minutes", ctx.state_get("shown_duration"));
+    }
 }
 
 fn on_drop(ctx) { il::publish_property(ctx, "available", "false"); }
@@ -128,6 +138,8 @@ fn record(ctx, r) {
         il::publish_property(ctx, "active_course", name);
         il::publish_property(ctx, "duration_minutes", r[6].to_string());
         ctx.state_set("course_shown", true);
+        ctx.state_set("shown_course", name);
+        ctx.state_set("shown_duration", r[6].to_string());
     } else if ctx.state_get("course_shown") == true {
         // Clear the last course so HA does not keep showing it while off (PR #9 review).
         // Keyed on what was published, not on a power change: a remote power-off already

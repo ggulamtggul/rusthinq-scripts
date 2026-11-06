@@ -21,6 +21,30 @@ fn test_start_publishes_the_default_course() {
     expect_eq(d.script_error(), ());
 }
 
+// start() on a fresh attach knows no power yet and sends nothing.
+fn test_a_fresh_start_publishes_no_power() {
+    let d = device();
+    d.start();
+    expect_eq(d.property("power"), ());
+    expect_eq(d.property("active_course"), ());
+    expect_eq(d.sent().len(), 0);
+}
+
+// After a hot reload (state kept, start() runs again) power and course are republished
+// from kept state; still nothing is sent.
+fn test_a_restart_republishes_kept_power_and_course() {
+    let d = device();
+    d.feed(eb_on());
+    let course = d.property("active_course");
+    let duration = d.property("duration_minutes");
+    d.start();
+    expect_eq(d.property("power"), "true");
+    expect_eq(d.property("active_course"), course);
+    expect_eq(d.property("duration_minutes"), duration);
+    expect_eq(d.sent().len(), 0);
+    expect_eq(d.script_error(), ());
+}
+
 fn test_an_eb_record_becomes_il_properties() {
     let d = device();
     d.feed(eb_on());
