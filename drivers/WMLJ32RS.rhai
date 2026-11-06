@@ -15,12 +15,13 @@
 //        cook sent from the app, waiting for the start button). Other codes (cooling, cleaning ...) were not in
 //        the captures and publish as unknown_<n> rather than a guessed name.
 //   [3]  1 while the unit idles, 0 while a cook is being set up or runs
-//   [5]  cook mode; 0 when idle, others unknown_<n>. Named from the owner's own cooks
-//        (0x04 oven, 0x0b air fry) and from the LG app's remote-start frames
-//        (F0 43 20 18 <mode> ...), whose payload carries each manual cook's modelJSON
-//        defaults: 0x01 power 10 + 1 min = microwave (also the panel's first dial
-//        position), 0x02 the same defaults = steam microwave (the only other mode with a
-//        power level), 0x15 weight 20 (0.2 kg) = defrost.
+//   [5]  cook mode; 0 when idle, others unknown_<n>. Mapped on 2026-11-06 by sending each
+//        modelJSON cook name (SetCookStart, cmdOptionSetCookName) through the LG cloud and
+//        reading the code the unit reported in its ready-to-start record (each was then
+//        cancelled with SetCookStop): RANGE 1, RANGE_STEAM 2, GRILL 3, OVEN 4,
+//        OVEN_STEAM 5, STEAM 6, DRY 7, FERMENTATION 9, FERMENTATION_STEAM 10, AIRFRY 11,
+//        AIRSOUSVIDE 13. 0x15 is defrost (INVERTER_DEFROST, not sent by hand): the LG app's own
+//        frame for it carried the 0.2 kg default weight only that mode has.
 //   [8..9] big-endian set temperature (0xb4 180, 0xb9 185 - the cloud reported exactly
 //        these). [6..7] reads 0xd2 only in defrost, so it is not a temperature.
 //   [15..17] remaining h/m/s, [18..20] set cook time h/m/s (1:20 counting down
@@ -95,8 +96,15 @@ fn mode_name(v) {
         0 => "없음",
         0x01 => "전자레인지",
         0x02 => "스팀 전자레인지",
+        0x03 => "구이",
         0x04 => "오븐",
+        0x05 => "스팀 오븐",
+        0x06 => "스팀(찜)",
+        0x07 => "식품건조",
+        0x09 => "발효",
+        0x0a => "스팀 발효",
         0x0b => "에어프라이",
+        0x0d => "에어수비드",
         0x15 => "해동",
         _ => "unknown_" + v.to_string()
     }
