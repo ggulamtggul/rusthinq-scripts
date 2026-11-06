@@ -171,3 +171,19 @@ fn test_an_unknown_course_is_rejected() {
     expect_eq(d.sent().len(), n);
     expect(d.event("reject") != (), "a reject event is published");
 }
+
+// Smart care bits in record [20], from a live mapping run on 2026-11-06 (each setting
+// toggled and checked against the cloud). Frames are the real captures, in order.
+fn test_smart_care_flags_follow_the_record() {
+    let d = device();
+    d.feed("aaff310a005a001203000100ec00480a00000000000035003500000000000004000002190700041600060000000000000000000a0000040000003500350100000000000400000219070004160006000000000000000000b390bb");   // baseline: fine dust on, humidity on, night care off
+    expect_props(d, #{ smart_care_fine_dust: "true", smart_care_humidity: "true", smart_care_night_care: "false" });
+    d.feed("aaff310a005a00120a000100ec00480a00000400000035003501000000000004000002190700041600060000000000000000000a00000400000035003501000000000004000002190f00041600060000000000000000001417bb");   // night care switched on
+    expect_props(d, #{ smart_care_fine_dust: "true", smart_care_humidity: "true", smart_care_night_care: "true" });
+    d.feed("aaff310a005a001213000100ec00480a00000400000035003501000000000004000002190700041600060000000000000000000a0000040000003500350100000000000400000219030004160006000000000000000000b146bb");   // night care back off, humidity switched off
+    expect_props(d, #{ smart_care_fine_dust: "true", smart_care_humidity: "false", smart_care_night_care: "false" });
+    d.feed("aaff310a005a00121c000100ec00480a00000400000035003501000000000004000002190700041600060000000000000000000a0000040000003500350100000000000400000219050004160006000000000000000000f08abb");   // humidity back on, fine dust switched off
+    expect_props(d, #{ smart_care_fine_dust: "false", smart_care_humidity: "true", smart_care_night_care: "false" });
+    expect_eq(d.sent().len(), 0);
+    expect_eq(d.script_error(), ());
+}

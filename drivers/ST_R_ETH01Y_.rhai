@@ -17,7 +17,9 @@
 //              both directions; published optimistically like the TS driver.
 //
 // Status record (36 bytes, extracted from the tunnel envelope the FX___S way):
-//   [2] course id, [6] expected duration in minutes, [9] power (nonzero = on).
+//   [2] course id, [6] expected duration in minutes, [9] power (nonzero = on),
+//   [20] smart care bits (1 fine dust, 2 humidity, 3 night care; 0 = master),
+//   [23]/[25] night care start/end hour.
 //   The course id resets to 0 while off, so active_course / duration_minutes are
 //   only published while on. A course id with no confirmed name publishes
 //   `unknown_<id>` (the TS driver's fallback).
@@ -127,6 +129,13 @@ fn on_data(ctx, data) {
 fn record(ctx, r) {
     il::publish_property(ctx, "available", "true");
     let on = r[9] != 0;
+    // Smart care flags live in [20] (mapped live 2026-11-06 by toggling each setting and
+    // checking the cloud): bit 1 fine dust, bit 2 humidity, bit 3 night care; bit 0 stayed
+    // set throughout (the cloud's smart-care master switch). The writes stay optimistic and
+    // this confirms them, since the styler answers each write with a fresh record.
+    il::publish_property(ctx, "smart_care_fine_dust", c::on_off((r[20] >> 1) & 1));
+    il::publish_property(ctx, "smart_care_humidity", c::on_off((r[20] >> 2) & 1));
+    il::publish_property(ctx, "smart_care_night_care", c::on_off((r[20] >> 3) & 1));
     // The TS driver publishes power only when it changes.
     if ctx.state_get("power") != on {
         ctx.state_set("power", on);
