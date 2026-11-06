@@ -74,7 +74,7 @@ fn test_pr_117_5() {
     expect_eq(d.script_error(), ());
 }
 
-// power switch uses vtCtrl power for ON, preserves state echo, and remote-gates OFF
+// power switch uses vtCtrl power for ON, preserves state echo; OFF rides F0 E5 without a remote gate (live capture 2026-11-05)
 fn test_pr_117_6() {
     let d = device();
     d.feed("aaff340a0045000000000100eb003300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000055d6bb");
@@ -92,16 +92,17 @@ fn test_pr_117_6() {
     expect_eq(d.script_error(), ());
     d.set("power", "false");
     expect_props(d, #{"course": "none", "reserve_time": "0", "remaining_time": "0", "initial_time": "0", "state": "on", "error": "no_error", "remote_start": "false", "child_lock": "false", "door_lock": "false", "remote_maintain": "false", "setting_course": "standard", "setting_eco_hybrid": "auto", "setting_wrinkle_care": "off", "setting_steam": "off", "setting_dry_level": "standard", "power": "true", "power_transition": "complete"});
-    expect_eq(d.sent().len(), 1);
+    expect_eq(hex_encode(d.sent()[1]), "aa0df0e5000001ff010200dabb");
+    expect_eq(d.sent().len(), 2);
     expect_eq(d.script_error(), ());
     d.feed("aaff340a0045000000000100eb0033000000000000000000000000000100000000000000000000000040000000000000000000000000000000000000000000000000de5dbb");
     expect_props(d, #{"course": "none", "reserve_time": "0", "remaining_time": "0", "initial_time": "0", "state": "on", "error": "no_error", "remote_start": "true", "child_lock": "false", "door_lock": "false", "remote_maintain": "false", "setting_course": "standard", "setting_eco_hybrid": "auto", "setting_wrinkle_care": "off", "setting_steam": "off", "setting_dry_level": "standard", "power": "true", "power_transition": "complete"});
-    expect_eq(d.sent().len(), 1);
+    expect_eq(d.sent().len(), 2);
     expect_eq(d.script_error(), ());
     d.set("power", "false");
     expect_props(d, #{"course": "none", "reserve_time": "0", "remaining_time": "0", "initial_time": "0", "state": "on", "error": "no_error", "remote_start": "true", "child_lock": "false", "door_lock": "false", "remote_maintain": "false", "setting_course": "standard", "setting_eco_hybrid": "auto", "setting_wrinkle_care": "off", "setting_steam": "off", "setting_dry_level": "standard", "power": "true", "power_transition": "complete"});
-    expect_eq(hex_encode(d.sent()[1]), "aa09f0240101009cbb");
-    expect_eq(d.sent().len(), 2);
+    expect_eq(hex_encode(d.sent()[2]), "aa0df0e5000001ff010200dabb");
+    expect_eq(d.sent().len(), 3);
     expect_eq(d.script_error(), ());
 }
 
@@ -166,7 +167,7 @@ fn test_pr_117_8() {
     expect_eq(d.script_error(), ());
     d.set("power_off", "");
     expect_props(d, #{"course": "none", "reserve_time": "0", "remaining_time": "0", "initial_time": "0", "state": "drying", "error": "no_error", "remote_start": "false", "child_lock": "false", "door_lock": "false", "remote_maintain": "true", "setting_course": "standard", "setting_eco_hybrid": "auto", "setting_wrinkle_care": "off", "setting_steam": "off", "setting_dry_level": "standard", "power": "true", "power_transition": "standby"});
-    expect_eq(hex_encode(d.sent()[0]), "aa09f0240101009cbb");
+    expect_eq(hex_encode(d.sent()[0]), "aa0df0e5000001ff010200dabb");
     expect_eq(d.sent().len(), 1);
     expect_eq(d.script_error(), ());
 }
@@ -202,7 +203,7 @@ fn test_pr_117_10() {
     expect_eq(d.script_error(), ());
     d.set("power", "false");
     expect_props(d, #{"course": "none", "reserve_time": "0", "remaining_time": "0", "initial_time": "0", "state": "drying", "error": "no_error", "remote_start": "false", "child_lock": "false", "door_lock": "false", "remote_maintain": "true", "setting_course": "standard", "setting_eco_hybrid": "auto", "setting_wrinkle_care": "off", "setting_steam": "off", "setting_dry_level": "standard", "power": "true", "power_transition": "standby"});
-    expect_eq(hex_encode(d.sent()[0]), "aa09f0240101009cbb");
+    expect_eq(hex_encode(d.sent()[0]), "aa0df0e5000001ff010200dabb");
     expect_eq(d.sent().len(), 1);
     expect_eq(d.script_error(), ());
 }
@@ -586,6 +587,8 @@ fn test_pr_117_29() {
     expect_eq(d.script_error(), ());
     d.feed("aa0d34e6000201ff01020083bb");
     expect_props(d, #{"course": "none", "reserve_time": "0", "remaining_time": "0", "initial_time": "0", "state": "power_off", "error": "no_error", "remote_start": "false", "child_lock": "false", "door_lock": "false", "remote_maintain": "false", "setting_course": "standard", "setting_eco_hybrid": "auto", "setting_wrinkle_care": "off", "setting_steam": "off", "setting_dry_level": "standard", "power": "false", "power_transition": "command_accepted"});
+    expect_eq(d.sent().len(), 1);
+    d.fire("status_refresh");
     expect_eq(hex_encode(d.sent()[1]), "aa12f0ed1121010000001804111200005ebb");
     expect_eq(d.sent().len(), 2);
     expect_eq(d.script_error(), ());
