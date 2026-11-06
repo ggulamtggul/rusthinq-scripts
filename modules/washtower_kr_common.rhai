@@ -51,7 +51,7 @@ fn labels() { [
 ] }
 fn descriptor(ctx) {
  let props=#{available:#{type:"binary",role:"available"},power:#{type:"binary",rw:true},
- power_transition:#{type:"select",category:"diagnostic",options:["standby","turning_on","command_accepted","complete","timeout"]},
+ power_transition:#{type:"select",category:"diagnostic",options:["standby","turning_on","turning_off","command_accepted","complete","timeout"]},
  wake:#{type:"trigger"},pause:#{type:"trigger"},start:#{type:"trigger"},remote_maintain:#{type:"binary",rw:true}};
  if model().hidePowerOff!=true {props.power_off=#{type:"trigger"};}
  for key in public_keys() {let f=field(key);if f!=() {props[entity(key)]=definition(f);}}
@@ -68,11 +68,22 @@ fn publish_config(ctx) {il::publish_il(ctx,descriptor(ctx));}
 fn status_query(ctx) {ctx.send_raw(aabb_wrap(hex_decode("f0ed112101000000180411120000")));}
 // Runs after publish_config on attach and on a watched hot reload: ask for a record so a
 // reloaded driver republishes state instead of leaving entities unknown while the tower sleeps.
-fn start(ctx) {status_query(ctx);}
-fn on_drop(ctx) {ctx.cancel_timer("power_on_timeout");ctx.cancel_timer("status_refresh");ctx.state_remove("pending_power");il::publish_property(ctx,"available","false");}
+// power_transition is republished here too: kept driver state already marks it as seen, so
+// on_data would not publish it again after a reload.
+fn start(ctx) {
+ if ctx.state_get("pending_power")!=true && ctx.state_get("pending_off")!=true {il::publish_property(ctx,"power_transition","standby");}
+ status_query(ctx);
+}
+fn on_drop(ctx) {
+ ctx.cancel_timer("power_on_timeout");ctx.cancel_timer("power_off_timeout");ctx.cancel_timer("status_refresh");
+ ctx.state_remove("pending_power");ctx.state_remove("pending_off");il::publish_property(ctx,"available","false");
+}
 fn on_timer(ctx,name) {
  if name=="power_on_timeout" && ctx.state_get("pending_power")==true {
   ctx.state_remove("pending_power");ctx.state_remove("power_refresh");il::publish_property(ctx,"power_transition","timeout");
+ }
+ if name=="power_off_timeout" && ctx.state_get("pending_off")==true {
+  ctx.state_remove("pending_off");ctx.state_remove("off_accepted");il::publish_property(ctx,"power_transition","timeout");
  }
  if name=="status_refresh" {status_query(ctx);}
 }
@@ -81,17 +92,20 @@ fn checksum(data) {
  let sum=0;for i in 0..data.len()-2 {sum+=data[i];}
  data[data.len()-2]==((sum & 255)^0x55)
 }
+// The tower answers an F0 E5 power command with an E6 frame: 000201ff010200 accepts ON and
+// 000001ff010200 accepts OFF (both captured live 2026-11-06). Acceptance arms a status query
+// 3 s later so the transition settles without waiting for the tower to volunteer a record;
+// a record that arrives first cancels it. Only the first acceptance per command counts.
 fn power_response(ctx,data) {
- if ctx.state_get("pending_power")!=true || ctx.state_get("power_refresh")==true {return;}
  let m=model();
  if ![13,13+m.liveRecordLength,13+m.recordLength].contains(data.len()) || data[1]!=data.len() || data[2]!=m.tag || data[3]!=0xe6 || !checksum(data) {return;}
- if hex_encode(data.extract(4,7))!="000201ff010200" {return;}
- ctx.state_set("power_refresh",true);il::publish_property(ctx,"power_transition","command_accepted");
-}
-fn control_response(ctx,data) {
- let m=model();
- if ![13,13+m.liveRecordLength,13+m.recordLength].contains(data.len()) || data[1]!=data.len() || data[2]!=m.tag || data[3]!=0xe6 || !checksum(data) {return;}
- if hex_encode(data.extract(4,5))!="000201ff01" {return;}
+ let reply=hex_encode(data.extract(4,7));
+ if reply=="000201ff010200" && ctx.state_get("pending_power")==true && ctx.state_get("power_refresh")!=true {
+  ctx.state_set("power_refresh",true);
+ } else if reply=="000001ff010200" && ctx.state_get("pending_off")==true && ctx.state_get("off_accepted")!=true {
+  ctx.state_set("off_accepted",true);
+ } else {return;}
+ il::publish_property(ctx,"power_transition","command_accepted");
  ctx.set_timer("status_refresh",3000);
 }
 fn record(data) {
@@ -126,7 +140,6 @@ fn course_defaults(ctx,course,preserve) {
 fn on_data(ctx,data) {
  c::ack(ctx,data);
  power_response(ctx,data);
- control_response(ctx,data);
  let r=record(data);if r==() {return;}
  let obs=observed(ctx);let d=draft(ctx);let dirty=dirty(ctx);
  for f in model().fields {
@@ -148,7 +161,9 @@ fn on_data(ctx,data) {
  il::publish_property(ctx,"power",if obs.state==0 {"false"} else {"true"});
  if obs.state!=0 && ctx.state_get("pending_power")==true {
   ctx.state_remove("pending_power");ctx.state_remove("power_refresh");ctx.cancel_timer("power_on_timeout");ctx.cancel_timer("status_refresh");il::publish_property(ctx,"power_transition","complete");
- } else if ctx.state_get("transition_seen")!=true && ctx.state_get("pending_power")!=true {il::publish_property(ctx,"power_transition","standby");}
+ } else if obs.state==0 && ctx.state_get("pending_off")==true {
+  ctx.state_remove("pending_off");ctx.state_remove("off_accepted");ctx.cancel_timer("power_off_timeout");ctx.cancel_timer("status_refresh");il::publish_property(ctx,"power_transition","complete");
+ } else if ctx.state_get("transition_seen")!=true && ctx.state_get("pending_power")!=true && ctx.state_get("pending_off")!=true {il::publish_property(ctx,"power_transition","standby");}
  ctx.state_set("transition_seen",true);
 }
 fn option_byte(d,offset) {
@@ -208,8 +223,13 @@ fn set_property(ctx,prop,value) {
   // Power off rides the F0 E5 power channel with value 0, as the official
   // app does (AA0DF0E5000001FF010200DABB, captured live 2026-11-05); it is
   // not gated on remote start. F0 24 below is the stop/pause family only.
+  // Tracked like power on: turning_off -> command_accepted -> complete, or timeout. A repeated
+  // request resends and restarts the wait; an OFF supersedes a pending ON.
   if state==0 {rejected(ctx,prop);return;}
-  ctx.send_raw(aabb_wrap(hex_decode("f0e5000001ff010200")));return;
+  ctx.send_raw(aabb_wrap(hex_decode("f0e5000001ff010200")));
+  ctx.state_remove("pending_power");ctx.state_remove("power_refresh");ctx.cancel_timer("power_on_timeout");ctx.cancel_timer("status_refresh");
+  ctx.state_set("pending_off",true);ctx.state_set("off_accepted",false);ctx.state_set("transition_seen",true);
+  ctx.set_timer("power_off_timeout",60000);il::publish_property(ctx,"power_transition","turning_off");return;
  }
  if prop=="pause" {
   if state==0 || (obs.remoteStart!=1 && obs.remoteMaintain!=1) {rejected(ctx,prop);return;}
