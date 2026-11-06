@@ -85,7 +85,13 @@ fn on_timer(ctx,name) {
  if name=="power_off_timeout" && ctx.state_get("pending_off")==true {
   ctx.state_remove("pending_off");ctx.state_remove("off_accepted");il::publish_property(ctx,"power_transition","timeout");
  }
- if name=="status_refresh" {status_query(ctx);}
+ if name=="status_refresh" {
+  status_query(ctx);
+  // One retry 2 s later (3 s after acceptance) if the transition has not settled yet.
+  if ctx.state_get("refresh_retry")==true && (ctx.state_get("pending_power")==true || ctx.state_get("pending_off")==true) {
+   ctx.state_set("refresh_retry",false);ctx.set_timer("status_refresh",2000);
+  }
+ }
 }
 fn checksum(data) {
  if data.len()<4 || data[0]!=0xaa || data[data.len()-1]!=0xbb {return false;}
@@ -94,8 +100,9 @@ fn checksum(data) {
 }
 // The tower answers an F0 E5 power command with an E6 frame: 000201ff010200 accepts ON and
 // 000001ff010200 accepts OFF (both captured live 2026-11-06). Acceptance arms a status query
-// 3 s later so the transition settles without waiting for the tower to volunteer a record;
-// a record that arrives first cancels it. Only the first acceptance per command counts.
+// 1 s later and one retry at 3 s, so the transition settles without waiting for the tower to
+// volunteer a record (it usually does ~3 s after the command, but not always after a long
+// sleep); a record that settles it first cancels the rest. Only the first acceptance counts.
 fn power_response(ctx,data) {
  let m=model();
  if ![13,13+m.liveRecordLength,13+m.recordLength].contains(data.len()) || data[1]!=data.len() || data[2]!=m.tag || data[3]!=0xe6 || !checksum(data) {return;}
@@ -106,7 +113,7 @@ fn power_response(ctx,data) {
   ctx.state_set("off_accepted",true);
  } else {return;}
  il::publish_property(ctx,"power_transition","command_accepted");
- ctx.set_timer("status_refresh",3000);
+ ctx.state_set("refresh_retry",true);ctx.set_timer("status_refresh",1000);
 }
 fn record(data) {
  let m=model();

@@ -673,7 +673,7 @@ fn test_start_queries_status() {
  expect_eq(d.sent().len(),1);expect_eq(hex_encode(d.sent()[0]),"aa12f0ed1121010000001804111200005ebb");
  expect_eq(d.timers(),[]);expect_eq(d.script_error(),());
 }
-// Power-on success acknowledges acceptance; a status query follows 3 s later and only
+// Power-on success acknowledges acceptance; status queries follow 1 s and 3 s later and only
 // telemetry confirms that the power changed.
 fn test_power_acceptance_waits_for_telemetry_and_then_times_out() {
  let d=device();d.start();let r=blob(50);
@@ -686,7 +686,7 @@ fn test_power_acceptance_waits_for_telemetry_and_then_times_out() {
  d.feed(wt::response(52));
  expect_props(d,#{power:"false",power_transition:"command_accepted"});
  expect_eq(d.sent().len(),2);
- expect_eq(d.timers().filter(|t| t[0]=="status_refresh"),[["status_refresh",3000]]);
+ expect_eq(d.timers().filter(|t| t[0]=="status_refresh"),[["status_refresh",1000]]);
  d.fire("status_refresh");
  expect_eq(d.sent().len(),3);expect_eq(hex_encode(d.sent()[2]),"aa12f0ed1121010000001804111200005ebb");
  d.feed(wt::response(52));expect_eq(d.sent().len(),3);
@@ -707,7 +707,7 @@ fn test_start_publishes_standby_transition() {
  let d=device();d.start();
  expect_props(d,#{power_transition:"standby"});expect_eq(d.script_error(),());
 }
-// Power off is tracked like power on: turning_off, command_accepted plus a 3 s status query,
+// Power off is tracked like power on: turning_off, command_accepted plus status queries at 1 s and 3 s,
 // then the off record completes it and clears every timer.
 fn test_power_off_is_tracked_to_completion() {
  let d=device();let r=blob(50);r[13]=1;d.feed(wt::status(52,r));
@@ -717,7 +717,7 @@ fn test_power_off_is_tracked_to_completion() {
  expect_eq(d.timers(),[["power_off_timeout",60000]]);
  d.feed(wt::off_response(52));
  expect_props(d,#{power:"true",power_transition:"command_accepted"});
- expect_eq(d.timers().filter(|t| t[0]=="status_refresh"),[["status_refresh",3000]]);
+ expect_eq(d.timers().filter(|t| t[0]=="status_refresh"),[["status_refresh",1000]]);
  d.feed(wt::off_response(52));expect_eq(d.sent().len(),1);
  d.fire("status_refresh");expect_eq(hex_encode(d.sent()[1]),"aa12f0ed1121010000001804111200005ebb");
  r[13]=0;d.feed(wt::status(52,r));
@@ -737,4 +737,22 @@ fn test_on_reply_does_not_accept_a_pending_off() {
  d.set("power","false");d.feed(wt::response(52));
  expect_props(d,#{power_transition:"turning_off"});
  expect_eq(d.timers(),[["power_off_timeout",60000]]);
+}
+// Acceptance queries at 1 s and retries once 2 s later while unsettled; never a third time.
+fn test_refresh_retries_once_then_stops() {
+ let d=device();let r=blob(50);d.feed(wt::status(52,r));
+ d.set("power","true");d.feed(wt::response(52));
+ d.fire("status_refresh");expect_eq(d.sent().len(),2);expect_eq(hex_encode(d.sent()[1]),"aa12f0ed1121010000001804111200005ebb");
+ expect_eq(d.timers().filter(|t| t[0]=="status_refresh"),[["status_refresh",2000]]);
+ d.fire("status_refresh");expect_eq(d.sent().len(),3);expect_eq(hex_encode(d.sent()[2]),"aa12f0ed1121010000001804111200005ebb");
+ expect_eq(d.timers().filter(|t| t[0]=="status_refresh"),[]);
+ expect_props(d,#{power_transition:"command_accepted"});expect_eq(d.script_error(),());
+}
+// A record that settles the transition before the first query cancels both queries.
+fn test_settled_transition_sends_no_refresh() {
+ let d=device();let r=blob(50);d.feed(wt::status(52,r));
+ d.set("power","true");d.feed(wt::response(52));
+ r[13]=1;d.feed(wt::status(52,r));
+ expect_props(d,#{power:"true",power_transition:"complete"});
+ expect_eq(d.timers(),[]);expect_eq(d.sent().len(),1);
 }
