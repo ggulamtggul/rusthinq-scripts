@@ -55,7 +55,9 @@ fn publish_config(ctx) { il::publish_il(ctx, descriptor(ctx)); }
 
 fn start(ctx) {
     f::query(ctx); // f0 ed 12 11 01 00 00 01 04 00, the frame this unit's traffic shows
-    energy_publish(ctx);
+    // Republish buckets only when driver state survived (hot reload); a cold start has
+    // no buckets, and publishing 0 would read as a reset (PR #9 review).
+    if ctx.state_get("energy_day_wh") != () { energy_publish(ctx); }
     ctx.set_timer("energy_hour_roll", 3600000);
     ctx.set_timer("energy_day_roll", 86400000);
     ctx.set_timer("energy_month_roll", 2592000000);

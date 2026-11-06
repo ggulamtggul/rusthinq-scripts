@@ -43,8 +43,8 @@ fn processes() {
        "5": "End", "6": "Night Dry", "99": "Cancel" }
 }
 fn courses() {
-    #{ "0": "NONE", "1": "AUTO", "2": "HEAVY/INTENSIVE", "3": "DELICATE", "4": "TURBO",
-       "5": "NORMAL/ECO", "6": "RINSE", "7": "REFRESH", "8": "EXPRESS",
+    #{ "0": "NONE", "1": "AUTO", "2": "HEAVY-INTENSIVE", "3": "DELICATE", "4": "TURBO",
+       "5": "NORMAL-ECO", "6": "RINSE", "7": "REFRESH", "8": "EXPRESS",
        "9": "MACHINE_CLEAN", "10": "SHORT_MODE", "11": "DOWNLOAD_CYCLE" }
 }
 

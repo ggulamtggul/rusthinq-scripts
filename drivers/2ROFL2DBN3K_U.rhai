@@ -49,7 +49,9 @@ fn publish_config(ctx) { il::publish_il(ctx, descriptor(ctx)); }
 fn start(ctx) {
     // Silent on purpose (see the header). Publish the persisted buckets and arm the
     // rollover timers.
-    energy_publish(ctx);
+    // Republish buckets only when driver state survived (hot reload); a cold start has
+    // no buckets, and publishing 0 would read as a reset (PR #9 review).
+    if ctx.state_get("energy_day_wh") != () { energy_publish(ctx); }
     ctx.set_timer("energy_hour_roll", 3600000);
     ctx.set_timer("energy_day_roll", 86400000);
     ctx.set_timer("energy_month_roll", 2592000000);

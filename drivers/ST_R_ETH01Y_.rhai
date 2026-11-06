@@ -121,6 +121,11 @@ fn record(ctx, r) {
     if ctx.state_get("power") != on {
         ctx.state_set("power", on);
         il::publish_property(ctx, "power", if on { "true" } else { "false" });
+        if !on {
+            // Clear the last course so HA does not keep showing it while off (PR #9 review).
+            il::publish_absent(ctx, "active_course");
+            il::publish_absent(ctx, "duration_minutes");
+        }
     }
     if on {
         let name = t::name(courses(), r[2]);
