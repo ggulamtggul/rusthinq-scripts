@@ -125,51 +125,16 @@ fn test_app_rules_block_controls_by_state() {
     expect_eq(d.clips().len(), n);
 }
 
-// Asleep, a command first wakes the robot (the app's "절전 모드 해제": Cmd Config / WakeUp),
-// then is sent 5 s later as the app does.
-fn test_a_command_while_asleep_wakes_then_sends() {
+// The robot takes commands while asleep and wakes itself (live 2026-11-07), so sleep
+// gates nothing.
+fn test_commands_are_sent_while_asleep() {
     let d = device();
     d.start();
     d.feed(mon_state("SLEEP"));
-    let n = d.clips().len();
     d.set("clean_type", "먼지 흡입");
-    let c = d.clips();
-    expect_eq(c.len(), n + 1);
-    expect_eq(c[n].data.Cmd, "Config");
-    expect_eq(c[n].data.Value, "WakeUp");
-    expect_eq(c[n].data.clientId.len(), 64);
-    expect_eq(d.timers(), [["wake_resend", 5000]]);
-    expect(d.property("last_reject").contains("절전 모드를 해제"), "the wait is explained");
-    d.fire("wake_resend");
-    expect_eq(d.clips().len(), n + 2);
     expect_eq(last_value(d), #{ CLEAN_TYPE: "SUCTION" });
-    d.fire("wake_resend");
-    expect_eq(d.clips().len(), n + 2);
-}
-
-fn test_after_waking_the_new_state_still_gates() {
-    let d = device();
-    d.start();
-    d.feed(mon_state("SLEEP"));
-    d.set("homing", "");
-    d.feed(mon_state("CHARGING"));
-    let n = d.clips().len();
-    d.fire("wake_resend");
-    expect_eq(d.clips().len(), n);
-    expect(d.property("last_reject").contains("충전"), "charging refuses homing");
-}
-
-fn test_wake_up_button() {
-    let d = device();
-    d.start();
-    d.feed(mon_state("SLEEP"));
-    d.set("wake_up", "");
-    let c = d.clips();
-    expect_eq(c[c.len() - 1].data.Value, "WakeUp");
-    d.feed(mon_state("CHARGING"));
-    let n = d.clips().len();
-    d.set("wake_up", "");
-    expect_eq(d.clips().len(), n);
+    d.set("suction", "약");
+    expect_eq(last_value(d), #{ SUCTION_LEVEL: "QUIET" });
 }
 
 fn test_unknown_state_does_not_block() {

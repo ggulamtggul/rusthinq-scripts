@@ -215,8 +215,7 @@ fn descriptor(ctx) {
         mop_wash: #{ type: "trigger", label: "물걸레 바로 세척" },
         mop_dry: #{ type: "trigger", label: "물걸레 바로 건조" },
         mop_dry_stop: #{ type: "trigger", label: "물걸레 건조 종료" },
-        find_robot: #{ type: "trigger", label: "청소 로봇 위치 찾기" },
-        wake_up: #{ type: "trigger", label: "절전 모드 해제" }
+        find_robot: #{ type: "trigger", label: "청소 로봇 위치 찾기" }
     };
     json_stringify(#{ il: 0, kind: "vacuum", label: "로봇청소기", vendor: "LG",
                       model: ctx.model_id(), props: props })
@@ -433,6 +432,11 @@ fn refusal(ctx, prop) {
     if group == () { return (); }
     let cat = current_category(ctx);
     if cat == () { return (); }
+    // Asleep the app disables its buttons behind "절전 모드 해제", but the robot itself
+    // takes a command while asleep, applies it and wakes (verified live 2026-11-07:
+    // CLEAN_TYPE sent in SLEEP -> mon CLEAN_TYPE, controlResult 0000, then
+    // FINISHED_CHARGING). So nothing is refused for being asleep.
+    if cat == "sleep" { return (); }
     let raw = ctx.state_get("raw_state");
     // App rule: focus (spot) cleaning cannot start while charging.
     if prop == "spot_clean" && cat == "charging" { return "충전 중에는 집중청소를 할 수 없어요."; }
@@ -472,15 +476,6 @@ fn rk_set(ctx, value) {
                                                     clientId: client_id(), messageId: message_id(ctx) }));
 }
 
-// The app's "절전 모드 해제" (wakeUpIfEcoMode / SetWakeUp in modelJson ControlWifi):
-// Cmd "Config", Value "WakeUp". The app waits 5 s after it before sending anything else.
-fn rk_wake(ctx) {
-    ctx.send_clip("rkControl", 0, json_stringify(#{ Cmd: "Config", CmdOpt: "Set", Value: "WakeUp",
-                                                    clientId: client_id(), messageId: message_id(ctx) }));
-}
-
-fn wake_delay_ms() { 5000 }
-
 fn rk_set_bool(ctx, key, value) {
     let inner = #{}; inner[key] = value;
     rk_set(ctx, json_stringify(inner));
@@ -489,41 +484,7 @@ fn rk_set_bool(ctx, key, value) {
 fn on_set_property(ctx, prop, value) {
     let value = il::validate(ctx, prop, value);
     if value == () { return; }
-    if prop == "wake_up" {
-        if current_category(ctx) == "sleep" { rk_wake(ctx); } else {
-            il::reject(ctx, prop, "not_now", "절전 모드가 아니에요.");
-        }
-        return;
-    }
-    // Asleep on the dock the app disables everything behind a "절전 모드 해제" button.
-    // Do what the user would: wake it, wait like the app does, then send the command.
-    // The command is checked again against whatever state is known by then.
-    if current_category(ctx) == "sleep" && prop_group()[prop] != () {
-        rk_wake(ctx);
-        ctx.state_set("wake_prop", prop);
-        ctx.state_set("wake_value", value);
-        ctx.set_timer("wake_resend", wake_delay_ms());
-        il::publish_property(ctx, "last_reject", "절전 모드를 해제하고 있어요. 잠시 후 이어서 보낼게요.");
-        return;
-    }
-    send_prop(ctx, prop, value, false);
-}
-
-fn on_timer(ctx, name) {
-    if name != "wake_resend" { return; }
-    let prop = ctx.state_get("wake_prop");
-    let value = ctx.state_get("wake_value");
-    ctx.state_remove("wake_prop");
-    ctx.state_remove("wake_value");
-    if prop == () { return; }
-    // A state report since the wake is honoured; still "asleep" (no new CLIP report, as
-    // while docked state travels outside CLIP) is not held against it, as in the app.
-    send_prop(ctx, prop, value, true);
-}
-
-fn send_prop(ctx, prop, value, after_wake) {
     let why = refusal(ctx, prop);
-    if after_wake && current_category(ctx) == "sleep" { why = (); }
     if why != () {
         il::publish_property(ctx, "last_reject", why);
         il::reject(ctx, prop, "not_now", why);
